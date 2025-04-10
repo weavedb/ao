@@ -1,10 +1,10 @@
-import { identity } from 'ramda'
-import { of } from 'hyper-async'
+import { identity } from "ramda"
+import { of } from "hyper-async"
 
 // eslint-disable-next-line no-unused-vars
-import { Types } from '../../dal.js'
-import { errFrom } from '../utils.js'
-import { uploadMessageWith } from './upload-message.js'
+import { Types } from "../../dal.js"
+import { errFrom } from "../utils.js"
+import { uploadMessageWith } from "./upload-message.js"
 
 /**
  * @typedef Env1
@@ -23,13 +23,13 @@ import { uploadMessageWith } from './upload-message.js'
  * @param {Env1} - the environment
  * @returns {SendMessage}
  */
-export function messageWith (env) {
+export function messageWith(env) {
   const uploadMessage = uploadMessageWith(env)
 
-  return ({ process, data, tags, anchor, signer }) => {
-    return of({ id: process, data, tags, anchor, signer })
+  return ({ process, data, tags, anchor, signer, variant }) => {
+    return of({ id: process, data, tags, anchor, signer, variant })
       .chain(uploadMessage)
-      .map((ctx) => ctx.messageId)
+      .map(ctx => ctx.messageId)
       .bimap(errFrom, identity)
       .toPromise()
   }

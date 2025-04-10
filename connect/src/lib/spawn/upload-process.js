@@ -1,11 +1,11 @@
-import { fromPromise, of, Resolved } from 'hyper-async'
-import { z } from 'zod'
-import { __, always, assoc, curry, defaultTo, ifElse, pipe, prop } from 'ramda'
-import { proto } from '@permaweb/protocol-tag-utils'
+import { fromPromise, of, Resolved } from "hyper-async"
+import { z } from "zod"
+import { __, always, assoc, curry, defaultTo, ifElse, pipe, prop } from "ramda"
+import { proto } from "@permaweb/protocol-tag-utils"
 
-import { deployProcessSchema, signerSchema, tagSchema } from '../../dal.js'
+import { deployProcessSchema, signerSchema, tagSchema } from "../../dal.js"
 
-const aoProto = proto('ao')
+const aoProto = proto("ao")
 const removeAoProtoByName = curry(aoProto.removeAllByName)
 const concatAoProto = curry(aoProto.concat)
 const concatUnassoc = curry(aoProto.concatUnassoc)
@@ -27,59 +27,66 @@ const tagsSchema = z.array(tagSchema)
  * @property {any} upload
  */
 
-function buildTagsWith () {
-  return (ctx) => {
+function buildTagsWith() {
+  return ctx => {
     return of(ctx)
-      .map(prop('tags'))
+      .map(prop("tags"))
       .map(defaultTo([]))
-      .map(removeAoProtoByName('Variant'))
-      .map(removeAoProtoByName('Type'))
-      .map(removeAoProtoByName('Module'))
-      .map(removeAoProtoByName('Scheduler'))
-      .map(concatAoProto([
-        { name: 'Variant', value: 'ao.TN.1' },
-        { name: 'Type', value: 'Process' },
-        { name: 'Module', value: ctx.module },
-        { name: 'Scheduler', value: ctx.scheduler }
-      ]))
+      .map(removeAoProtoByName("Variant"))
+      .map(removeAoProtoByName("Type"))
+      .map(removeAoProtoByName("Module"))
+      .map(removeAoProtoByName("Scheduler"))
+      .map(
+        concatAoProto([
+          { name: "Variant", value: ctx.variant ?? "ao.TN.1" },
+          { name: "Type", value: "Process" },
+          { name: "Module", value: ctx.module },
+          { name: "Scheduler", value: ctx.scheduler },
+        ]),
+      )
       .map(tagsSchema.parse)
-      .map(assoc('tags', __, ctx))
+      .map(assoc("tags", __, ctx))
   }
 }
 
-function buildDataWith ({ logger }) {
-  return (ctx) => {
+function buildDataWith({ logger }) {
+  return ctx => {
     return of(ctx)
-      .chain(ifElse(
-        always(ctx.data),
-        /**
-         * data is provided as input, so do nothing
-         */
-        () => Resolved(ctx),
-        /**
-         * No data is provided, so replace with one space
-         */
-        () => Resolved(' ')
-          .map(assoc('data', __, ctx))
+      .chain(
+        ifElse(
+          always(ctx.data),
           /**
-           * Since we generate the data value, we know it's Content-Type,
-           * so set it on the tags
+           * data is provided as input, so do nothing
            */
-          .map(
-            (ctx) => pipe(
-              prop('tags'),
-              concatUnassoc([{ name: 'Content-Type', value: 'text/plain' }]),
-              assoc('tags', __, ctx)
-            )(ctx)
-          )
-          .map(logger.tap('added pseudo-random string as process "data"'))
-      ))
-      .map(
-        (ctx) => pipe(
-          prop('tags'),
-          concatUnassoc([{ name: 'SDK', value: 'aoconnect' }]),
-          assoc('tags', __, ctx)
-        )(ctx)
+          () => Resolved(ctx),
+          /**
+           * No data is provided, so replace with one space
+           */
+          () =>
+            Resolved(" ")
+              .map(assoc("data", __, ctx))
+              /**
+               * Since we generate the data value, we know it's Content-Type,
+               * so set it on the tags
+               */
+              .map(ctx =>
+                pipe(
+                  prop("tags"),
+                  concatUnassoc([
+                    { name: "Content-Type", value: "text/plain" },
+                  ]),
+                  assoc("tags", __, ctx),
+                )(ctx),
+              )
+              .map(logger.tap('added pseudo-random string as process "data"')),
+        ),
+      )
+      .map(ctx =>
+        pipe(
+          prop("tags"),
+          concatUnassoc([{ name: "SDK", value: "aoconnect" }]),
+          assoc("tags", __, ctx),
+        )(ctx),
       )
   }
 }
@@ -92,8 +99,8 @@ function buildDataWith ({ logger }) {
  * @param {Env6} env
  * @returns {UploadContract}
  */
-export function uploadProcessWith (env) {
-  const logger = env.logger.child('uploadProcess')
+export function uploadProcessWith(env) {
+  const logger = env.logger.child("uploadProcess")
   env = { ...env, logger }
 
   const buildTags = buildTagsWith(env)
@@ -101,13 +108,19 @@ export function uploadProcessWith (env) {
 
   const deployProcess = deployProcessSchema.implement(env.deployProcess)
 
-  return (ctx) => {
+  return ctx => {
     return of(ctx)
       .chain(buildTags)
       .chain(buildData)
-      .chain(fromPromise(({ data, tags, signer }) =>
-        deployProcess({ data, tags, signer: signerSchema.implement(signer || env.signer) })
-      ))
-      .map(res => assoc('processId', res.processId, ctx))
+      .chain(
+        fromPromise(({ data, tags, signer }) =>
+          deployProcess({
+            data,
+            tags,
+            signer: signerSchema.implement(signer || env.signer),
+          }),
+        ),
+      )
+      .map(res => assoc("processId", res.processId, ctx))
   }
 }
